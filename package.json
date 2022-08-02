@@ -1,0 +1,17 @@
+{
+  "name": "ice",
+  "version": "1.0.0",
+  "description": "",
+  "main": "ice.js",
+  "scripts": {
+    "start": "node ice.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "ejs": "^3.1.8",
+    "express": "^4.18.1"
+  }
+}

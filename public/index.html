@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello WebRTC</title>
+</head>
+<body>
+    <h1>Hello WebRTC</h1>
+    <form id="initial">
+        <input type="button" onclick="openRoom()" value="Open room">
+        <input type="button" onclick="joinRoom()" value="Join room">
+    </form>
+    <div id="messages"></div>
+    <form id="chat" style="visibility: hidden" onsubmit="send()" action="#">
+        <input id="message" type="textarea" placeholder="message">
+    </form>
+    <video id="received_video" autoplay></video>
+    <video id="local_video" autoplay></video>
+
+</body>
+<script type="text/javascript">
+    let isOwner = false;
+    let isConnected = false;
+    let hasOffered = false;
+    let roomId = 1;
+    const pc = new RTCPeerConnection();
+    const dc = pc.createDataChannel("channel");
+    var port = '';
+
+    navigator.mediaDevices.getUserMedia({audio: true, video: true}).then(stream => {
+            localStream = stream;
+            document.getElementById("local_video").srcObject = localStream;
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    }).catch(e => console.error(e));
+        
+    function onRoomSelection(){
+        document.getElementById("initial").style.visibility = "hidden";
+        document.getElementById("chat").style.visibility = "";
+    }
+
+    function openRoom(){
+        dc.onmessage = e => onMessage(e.data);
+        dc.onopen = e => console.log("Connected!");
+        pc.onicecandidate = e =>  offer(pc.localDescription);
+        pc.ontrack = handleTrackEvent;
+        pc.createOffer().then(o => pc.setLocalDescription(o)).then(a => console.log("Set succesfully!")).then(a => isOwner = true).then(a => connectRoom());
+    }
+
+    function handleTrackEvent(event) {
+         document.getElementById("received_video").srcObject = event.streams[0];
+    }
+
+    function connectRoom(){
+        var xhr = new XMLHttpRequest();
+        const myPromise = new Promise((resolve, reject) => {
+            setTimeout(() => {
+                if(!isConnected) connectRoom();
+                else resolve(true);
+            }, 5);
+        });
+        xhr.addEventListener("readystatechange", function() {
+            if(this.readyState === 4) {
+                console.log(this.responseText);
+                const answer = JSON.parse(this.responseText).room[1];
+                console.log(answer.sdp)
+                if(answer.sdp.type === "answer"){
+                    pc.setRemoteDescription(answer.sdp).then(a => {
+                        onRoomSelection();
+                        isConnected = true;
+                    });
+                }
+            }
+        });
+        
+        xhr.open("GET", `${window.location.protocol}//${window.location.hostname}:${port}/joinRoom/${roomId}`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        xhr.send();
+    }
+
+    function joinRoom(){
+        pc.onicecandidate = e => answer(pc.localDescription);
+        pc.ontrack = handleTrackEvent;
+        pc.ondatachannel = e => {
+            pc.dc = e.channel;
+            pc.dc.onmessage = e => onMessage(e.data);
+            pc.dc.onopen = e => console.log("Connected!");
+        }
+        ask();
+    }
+
+    function send(){
+        event.preventDefault();
+
+        const msg = document.getElementById("message").value;
+        document.getElementById("message").value = "";
+        if(isOwner){
+            dc.send(msg)
+        }else{
+            pc.dc.send(msg);
+        }
+
+        const newMessage = document.createElement("div");
+        newMessage.style.float = "right";
+        const newContent = document.createTextNode(getTimestamp() + ": " + msg);
+        newMessage.appendChild(newContent);
+        const messages = document.getElementById("messages");
+        document.body.insertBefore(newMessage, messages);
+    }
+
+    function ask(){
+        const queryString = window.location.search;
+        const urlParams = new URLSearchParams(queryString);
+        roomId = urlParams.get('roomId');
+        var xhr = new XMLHttpRequest();
+
+        xhr.addEventListener("readystatechange", function() {
+            if(this.readyState === 4) {
+                console.log(this.responseText);
+                const offer = JSON.parse(this.responseText).room[0];
+                console.log(offer.sdp)
+                pc.setRemoteDescription(offer.sdp).then(e => console.log("offer set"));
+                pc.createAnswer().then(a => pc.setLocalDescription(a)).then(a => console.log("answer created")).then(a => onRoomSelection());
+            }
+        });
+
+        xhr.open("GET", `${window.location.protocol}//${window.location.hostname}:${port}/joinRoom/${roomId}`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        xhr.send();
+    }
+
+    function offer(x){
+        console.log(JSON.stringify(x));
+        var data = JSON.stringify(x);
+
+        var xhr = new XMLHttpRequest();
+
+        xhr.addEventListener("readystatechange", function() {
+            if(this.readyState === 4 && !hasOffered) {
+                hasOffered = true;
+                console.log(this.responseText);
+                roomId = parseInt(this.responseText);
+                var searchParams = new URLSearchParams(window.location.search)
+                searchParams.set("roomId", roomId.toString());
+                var newRelativePathQuery = window.location.pathname + '?' + searchParams.toString();
+                history.pushState(null, '', newRelativePathQuery);
+                prompt("Copy this url and share it with another peer ", window.location.href);
+            }
+        });
+
+        xhr.open("POST", `${window.location.protocol}//${window.location.hostname}:${port}/openRoom`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        xhr.send(data);
+    }
+
+    function answer(x){
+        const queryString = window.location.search;
+        const urlParams = new URLSearchParams(queryString);
+        roomId = urlParams.get('roomId');
+        console.log(JSON.stringify(x));
+        var data = JSON.stringify(x);
+
+        var xhr = new XMLHttpRequest();
+
+        xhr.addEventListener("readystatechange", function() {
+            if(this.readyState === 4) {
+                console.log(this.responseText);
+            }
+        });
+
+        xhr.open("POST", `${window.location.protocol}//${window.location.hostname}:${port}/answer/${roomId}`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        xhr.send(data);
+    }
+
+    function onMessage(msg){
+        console.log(msg);
+        const newMessage = document.createElement("div");
+        const newContent = document.createTextNode(getTimestamp() + ": " + msg);
+        newMessage.appendChild(newContent);
+        const messages = document.getElementById("messages");
+        document.body.insertBefore(newMessage, messages);
+    }
+
+    function getTimestamp () {
+        const pad = (n,s=2) => (`${new Array(s).fill(0)}${n}`).slice(-s);
+        const d = new Date();
+        return `${pad(d.getFullYear(),4)}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+</script>
+</html>
