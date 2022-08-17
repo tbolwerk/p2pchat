@@ -19,8 +19,9 @@ app.use(express.static('public'))
 
 app.post('/openRoom', (req, res) => {
     const id = createUnique();
-    const sdp = req.body;
-    rooms[id] = [{sdp: sdp, port: req.connection.remotePort, address: req.connection.remoteAddress}];
+    const {username: username, offer: sdp} = req.body;
+    console.log(sdp);
+    rooms[id] = [{username: username, sdp: sdp, port: req.connection.remotePort, address: req.connection.remoteAddress}];
     res.send(id.toString())
 })
 
@@ -31,8 +32,8 @@ app.get('/joinRoom/:roomId', (req, res) => {
 
 app.post('/answer/:roomId', (req, res) => {
     const roomId = req.params.roomId;
-    const sdp = req.body;
-    rooms[roomId].push({sdp: sdp, port: req.connection.remotePort, address: req.connection.remoteAddress});
+    const {username: username, answer: sdp} = req.body;
+    rooms[roomId].push({username: username, sdp: sdp, port: req.connection.remotePort, address: req.connection.remoteAddress});
     res.json({room: rooms[roomId]});
 })
 

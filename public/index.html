@@ -4,26 +4,35 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello WebRTC</title>
+    <title>Peer 2 Peer chat</title>
 </head>
 <body>
-    <h1>Hello WebRTC</h1>
+    <h1>Peer 2 Peer chat</h1>
     <form id="initial">
+        <input id="username" type="text" placeholder="username" required maxlength="10">
         <input type="button" onclick="openRoom()" value="Open room">
         <input type="button" onclick="joinRoom()" value="Join room">
     </form>
-    <div id="messages"></div>
     <form id="chat" style="visibility: hidden" onsubmit="send()" action="#">
         <input id="message" type="textarea" placeholder="message">
     </form>
-    <video id="received_video" autoplay></video>
-    <video id="local_video" autoplay></video>
+    <div style="float: left;">
+        <video id="received_video" autoplay></video>
+        <p id="otherusername"></p>
+    </div>
+    <div style="float: right;">
+        <video id="local_video" autoplay ></video>
+        <p id="myusername"></p>
+    </div>
+    <div id="messages"></div>
 
 </body>
 <script type="text/javascript">
     let isOwner = false;
     let isConnected = false;
     let hasOffered = false;
+    let myusername = "unknown"
+    let otherusername = "unknown"
     let roomId = 1;
     const pc = new RTCPeerConnection();
     const dc = pc.createDataChannel("channel");
@@ -34,6 +43,27 @@
             document.getElementById("local_video").srcObject = localStream;
             localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     }).catch(e => console.error(e));
+
+    function isUsernameGiven()
+    {
+        return getUsername() !== "";
+    }
+
+    function getUsername()
+    {
+        return document.getElementById("username").value;
+    }
+
+    function setMyUsername(username)
+    {
+        myusername = username;
+        document.getElementById("myusername").innerHTML = myusername;
+    }
+    function setOtherUsername(username)
+    {
+        otherusername = username;
+        document.getElementById("otherusername").innerHTML = otherusername;
+    }
         
     function onRoomSelection(){
         document.getElementById("initial").style.visibility = "hidden";
@@ -41,9 +71,12 @@
     }
 
     function openRoom(){
+        if(!isUsernameGiven()) { return; }
+        setMyUsername(getUsername());
         dc.onmessage = e => onMessage(e.data);
         dc.onopen = e => console.log("Connected!");
-        pc.onicecandidate = e =>  offer(pc.localDescription);
+        dc.onclose = e => { setOtherUsername(otherusername + " disconnected!"); document.getElementById("received_video").srcObject = undefined;} 
+        pc.onicecandidate = e =>  offer({username: getUsername(), offer: pc.localDescription});
         pc.ontrack = handleTrackEvent;
         pc.createOffer().then(o => pc.setLocalDescription(o)).then(a => console.log("Set succesfully!")).then(a => isOwner = true).then(a => connectRoom());
     }
@@ -58,12 +91,13 @@
             setTimeout(() => {
                 if(!isConnected) connectRoom();
                 else resolve(true);
-            }, 5);
+            }, 5000);
         });
         xhr.addEventListener("readystatechange", function() {
             if(this.readyState === 4) {
                 console.log(this.responseText);
                 const answer = JSON.parse(this.responseText).room[1];
+                setOtherUsername(answer.username);
                 console.log(answer.sdp)
                 if(answer.sdp.type === "answer"){
                     pc.setRemoteDescription(answer.sdp).then(a => {
@@ -81,7 +115,9 @@
     }
 
     function joinRoom(){
-        pc.onicecandidate = e => answer(pc.localDescription);
+        if(!isUsernameGiven()) { return; }
+        setMyUsername(getUsername());
+        pc.onicecandidate = e => answer({username: getUsername(), answer:pc.localDescription});
         pc.ontrack = handleTrackEvent;
         pc.ondatachannel = e => {
             pc.dc = e.channel;
@@ -103,9 +139,12 @@
         }
 
         const newMessage = document.createElement("div");
-        newMessage.style.float = "right";
-        const newContent = document.createTextNode(getTimestamp() + ": " + msg);
+        const newContent = document.createTextNode(myusername + ": " + msg);
+        const timestampContent = document.createTextNode(getTimestamp());
+        const br = document.createElement("br");
         newMessage.appendChild(newContent);
+        newMessage.appendChild(br);
+        newMessage.appendChild(timestampContent);
         const messages = document.getElementById("messages");
         document.body.insertBefore(newMessage, messages);
     }
@@ -120,6 +159,7 @@
             if(this.readyState === 4) {
                 console.log(this.responseText);
                 const offer = JSON.parse(this.responseText).room[0];
+                setOtherUsername(offer.username);
                 console.log(offer.sdp)
                 pc.setRemoteDescription(offer.sdp).then(e => console.log("offer set"));
                 pc.createAnswer().then(a => pc.setLocalDescription(a)).then(a => console.log("answer created")).then(a => onRoomSelection());
@@ -181,8 +221,12 @@
     function onMessage(msg){
         console.log(msg);
         const newMessage = document.createElement("div");
-        const newContent = document.createTextNode(getTimestamp() + ": " + msg);
+        const newContent = document.createTextNode(otherusername + ": " + msg);
+        const timestampContent = document.createTextNode(getTimestamp());
+        const br = document.createElement("br");
         newMessage.appendChild(newContent);
+        newMessage.appendChild(br);
+        newMessage.appendChild(timestampContent);
         const messages = document.getElementById("messages");
         document.body.insertBefore(newMessage, messages);
     }
