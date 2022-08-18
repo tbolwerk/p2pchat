@@ -5,13 +5,14 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Peer 2 Peer chat</title>
+    <link rel="stylesheet" href="index.css">
 </head>
 <body>
     <h1>Peer 2 Peer chat</h1>
     <form id="initial">
-        <input id="username" type="text" placeholder="username" required maxlength="10">
-        <input type="button" onclick="openRoom()" value="Open room">
-        <input type="button" onclick="joinRoom()" value="Join room">
+        <input class="initial_input" id="username" type="text" placeholder="username" required maxlength="10">
+        <input class="initial_input" type="button" onclick="openRoom()" value="Open room">
+        <input class="initial_input" type="button" onclick="joinRoom()" value="Join room">
     </form>
     <form id="chat" style="visibility: hidden" onsubmit="send()" action="#">
         <input id="message" type="textarea" placeholder="message">
@@ -24,20 +25,19 @@
         <video id="local_video" autoplay ></video>
         <p id="myusername"></p>
     </div>
-    <div id="messages"></div>
-
+    <div id="messages" style="overflow-y: scroll; max-height: 50vh;"></div>
 </body>
 <script type="text/javascript">
     let isOwner = false;
     let isConnected = false;
     let hasOffered = false;
-    let myusername = "unknown"
+    let myusername = "You"
     let otherusername = "unknown"
     let roomId = 1;
     const pc = new RTCPeerConnection();
     const dc = pc.createDataChannel("channel");
     var port = '';
-
+    setMyUsername(myusername);
     navigator.mediaDevices.getUserMedia({audio: true, video: true}).then(stream => {
             localStream = stream;
             document.getElementById("local_video").srcObject = localStream;
@@ -127,28 +127,6 @@
         ask();
     }
 
-    function send(){
-        event.preventDefault();
-
-        const msg = document.getElementById("message").value;
-        document.getElementById("message").value = "";
-        if(isOwner){
-            dc.send(msg)
-        }else{
-            pc.dc.send(msg);
-        }
-
-        const newMessage = document.createElement("div");
-        const newContent = document.createTextNode(myusername + ": " + msg);
-        const timestampContent = document.createTextNode(getTimestamp());
-        const br = document.createElement("br");
-        newMessage.appendChild(newContent);
-        newMessage.appendChild(br);
-        newMessage.appendChild(timestampContent);
-        const messages = document.getElementById("messages");
-        document.body.insertBefore(newMessage, messages);
-    }
-
     function ask(){
         const queryString = window.location.search;
         const urlParams = new URLSearchParams(queryString);
@@ -228,7 +206,31 @@
         newMessage.appendChild(br);
         newMessage.appendChild(timestampContent);
         const messages = document.getElementById("messages");
-        document.body.insertBefore(newMessage, messages);
+        messages.appendChild(newMessage);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function send(){
+        event.preventDefault();
+
+        const msg = document.getElementById("message").value;
+        document.getElementById("message").value = "";
+        if(isOwner){
+            dc.send(msg)
+        }else{
+            pc.dc.send(msg);
+        }
+
+        const newMessage = document.createElement("div");
+        const newContent = document.createTextNode(myusername + ": " + msg);
+        const timestampContent = document.createTextNode(getTimestamp());
+        const br = document.createElement("br");
+        newMessage.appendChild(newContent);
+        newMessage.appendChild(br);
+        newMessage.appendChild(timestampContent);
+        const messages = document.getElementById("messages");
+        messages.appendChild(newMessage);
+        messages.scrollTop = messages.scrollHeight;
     }
 
     function getTimestamp () {
